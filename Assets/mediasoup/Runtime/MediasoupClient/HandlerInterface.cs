@@ -88,17 +88,6 @@ public class HandlerInterface : EnhancedEventEmitter<HandlerEvents>
         var audioTrans =  pc.AddTransceiver(TrackKind.Audio);
         var videoTrans =  pc.AddTransceiver(TrackKind.Video);
 
-        // Get all available video codecs.
-        var codecs = RTCRtpSender.GetCapabilities(TrackKind.Video).codecs;
-
-        // Filter codecs.
-        var h264Codecs = codecs.Where(codec => codec.mimeType == "video/H264");
-
-        var error = videoTrans.SetCodecPreferences(h264Codecs.ToArray());
-        if (error != RTCErrorType.None)
-            Debug.LogError("SetCodecPreferences failed");
-
-
         RTCSessionDescriptionAsyncOperation offer = await CreateOfferAsync(pc);
 
         Debug.Log("GetNativeRtpCapabilites: " + offer.Desc.sdp);

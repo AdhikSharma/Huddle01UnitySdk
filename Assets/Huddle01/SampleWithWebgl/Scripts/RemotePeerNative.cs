@@ -38,47 +38,68 @@ namespace Huddle01.Sample
 
         void Update()
         {
-            if (_remotePeer != null) 
+            while (ConsumeTasks.Count > 0)
             {
-                _remotePeer.On("stream-playable", async (arg) =>
-                {
-                    try
-                    {
-                        Consumer<Mediasoup.Types.AppData> consumer = arg[0] as Consumer<Mediasoup.Types.AppData>;
-                        string label = arg[1] as string;
-
-                        if (label.Equals("audio"))
-                        {
-                            var temp = new Tuple<Action<Consumer<Mediasoup.Types.AppData>, string>, Consumer<Mediasoup.Types.AppData>, string>(EnableAudio, consumer, label);
-                            ConsumeTasks.Add(temp);
-                        }
-                        else if (label.Equals("video"))
-                        {
-                            var temp = new Tuple<Action<Consumer<Mediasoup.Types.AppData>, string>, Consumer<Mediasoup.Types.AppData>, string>(EnableVideo, consumer, label);
-                            ConsumeTasks.Add(temp);
-                        }
-
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.LogError(ex);
-                    }
-                });
-
-                _remotePeer.On("stream-closed", async (arg) =>
-                {
-                    var temp = new Tuple<Action<string, string>, string, string>(OnCloseTrack, arg[0] as string, arg[1] as string);
-                    CloseConsumerTasks.Add(temp);
-                });
+                ConsumeTasks[0].Item1.Invoke(ConsumeTasks[0].Item2, ConsumeTasks[0].Item3);
+                ConsumeTasks.RemoveAt(0);
             }
 
-            Room.Instance.On("peer-left", async (arg) => DestroyThisObject());
+            while (CloseConsumerTasks.Count > 0)
+            {
+                CloseConsumerTasks[0].Item1.Invoke(CloseConsumerTasks[0].Item2, CloseConsumerTasks[0].Item3);
+                CloseConsumerTasks.RemoveAt(0);
+            }
+
+            if (_videotrack != null && _videotrack.ReadyState == TrackState.Live && _videotrack.Enabled)
+            {
+                Debug.Log($"tex format {_videotrack.Texture == null}");
+
+                _videoTexture.texture = _videotrack.Texture;
+            }
         }
 
         public override void Init(string remotePeerId)
         {
             base.Init(remotePeerId);
             _remotePeer = Room.Instance.GetRemotePeerById(remotePeerId);
+
+            _remotePeer.On("stream-playable", async (arg) =>
+            {
+                Debug.Log("Play stream");
+                try
+                {
+                    Consumer<Mediasoup.Types.AppData> consumer = arg[0] as Consumer<Mediasoup.Types.AppData>;
+                    string label = arg[1] as string;
+
+                    Debug.Log(consumer.track.ReadyState);
+
+                    if (label.Equals("audio"))
+                    {
+                        var temp = new Tuple<Action<Consumer<Mediasoup.Types.AppData>, string>, Consumer<Mediasoup.Types.AppData>, string>(EnableAudio, consumer, label);
+                        ConsumeTasks.Add(temp);
+                    }
+                    else if (label.Equals("video"))
+                    {
+                        var temp = new Tuple<Action<Consumer<Mediasoup.Types.AppData>, string>, Consumer<Mediasoup.Types.AppData>, string>(EnableVideo, consumer, label);
+                        ConsumeTasks.Add(temp);
+                    }
+
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError(ex);
+                }
+            });
+
+            _remotePeer.On("stream-closed", async (arg) =>
+            {
+                Debug.Log("Close stream");
+                var temp = new Tuple<Action<string, string>, string, string>(OnCloseTrack, arg[0] as string, arg[1] as string);
+                CloseConsumerTasks.Add(temp);
+            });
+
+            Room.Instance.On("peer-left", async (arg) => DestroyThisObject());
+
         }
 
         public override void SetMetadata(MetadataInfo metadata)
@@ -164,11 +185,10 @@ namespace Huddle01.Sample
         {
             if (peerId.Equals(_remotePeer.PeerId)) 
             {
-                return;
+                _nameText.text = metadata.Name;
+                base.PeerMetadataUpdated(peerId, metadata);
             }
 
-            _nameText.text = metadata.Name;
-            base.PeerMetadataUpdated(peerId, metadata);
         }
 
         public override void DestroyThisObject()
